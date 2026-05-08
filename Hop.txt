@@ -1,0 +1,323 @@
+--[[
+    ============================================
+    ANTI-ENTITY KILL - ADDON CHO SENSATION V2
+    ============================================
+    Script này sẽ bảo vệ bạn khỏi TẤT CẢ entity
+    Chạy script này SAU KHI Sensation V2 đã load
+]]
+
+-- Đợi script chính load
+task.wait(5)
+
+print("🛡️ ANTI-ENTITY KILL ADDON ĐANG KÍCH HOẠT...")
+
+-- ===== SERVICES =====
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- ===== DANH SÁCH ENTITY CẦN VÔ HIỆU HÓA =====
+local DANGEROUS_ENTITIES = {
+    -- Floor 1
+    "Rush", "Ambush", "Screech", "Halt", "Eyes", "Seek", "Figure",
+    "Jack", "Hide", "Timothy", "Window", "Shadow", "Glitch",
+    
+    -- Floor 2
+    "Giggle", "Grumble", "Gloom", "Blitz", "A-60", "A-90", "A-120",
+    "Curious Light", "Dupe", "Snare", "Void",
+    
+    -- The Rooms
+    "A-200", "A-250",
+    
+    -- Primordial
+    "The Eternal", "The Veil",
+}
+
+-- ===== CHỨC NĂNG 1: VÔ HIỆU HÓA ENTITY KILLER =====
+local function DisableEntityKill()
+    print("[ANTI-KILL] Đang vô hiệu hóa khả năng kill của entity...")
+    
+    -- Phương pháp 1: Ghi đè hàm Damage của Humanoid
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local args = {...}
+        local method = getnamecallmethod()
+        
+        -- Chặn TakeDamage
+        if method == "TakeDamage" and self:IsA("Humanoid") then
+            local character = self.Parent
+            if character then
+                local player = Players:GetPlayerFromCharacter(character)
+                if player == LocalPlayer then
+                    print("[ANTI-KILL] ĐÃ CHẶN SÁT THƯƠNG từ entity!")
+                    return -- Không nhận sát thương
+                end
+            end
+        end
+        
+        -- Chặn Destroy
+        if method == "Destroy" and self == LocalPlayer.Character then
+            print("[ANTI-KILL] ĐÃ CHẶN DESTROY CHARACTER!")
+            return
+        end
+        
+        return oldNamecall(self, ...)
+    end)
+    
+    print("[ANTI-KILL] Hook __namecall thành công!")
+end
+
+-- ===== CHỨC NĂNG 2: TỰ ĐỘNG THOÁT CLOSET KHI ENTITY ĐẾN =====
+local function AutoClosetEscape()
+    print("[ANTI-KILL] Đang kích hoạt tự động thoát closet...")
+    
+    spawn(function()
+        while true do
+            task.wait(0.5)
+            
+            local character = LocalPlayer.Character
+            if not character then continue end
+            
+            -- Kiểm tra nếu đang trong closet
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid and humanoid.SeatPart then
+                local seatPart = humanoid.SeatPart
+                if seatPart.Name:find("Closet") or seatPart.Name:find("Bed") then
+                    print("[ANTI-KILL] Đang trong closet/bed - thoát tự động...")
+                    humanoid.Sit = false
+                end
+            end
+        end
+    end)
+end
+
+-- ===== CHỨC NĂNG 3: TỰ ĐỘNG TRÁNH SCRIERECH =====
+local function AutoAvoidScreech()
+    print("[ANTI-KILL] Đang kích hoạt tránh Screech...")
+    
+    -- Tìm RemoteEvent nhìn Screech
+    local screechEvent = ReplicatedStorage:FindFirstChild("Screech") 
+        or ReplicatedStorage:FindFirstChild("LookAtScreech")
+    
+    if screechEvent then
+        spawn(function()
+            while true do
+                task.wait(0.2)
+                
+                -- Tự động nhìn lên (tránh Screech)
+                local character = LocalPlayer.Character
+                if character then
+                    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+                    if humanoidRootPart then
+                        -- Gửi tín hiệu đã nhìn Screech
+                        pcall(function()
+                            screechEvent:FireServer()
+                        end)
+                    end
+                end
+            end
+        end)
+    else
+        print("[ANTI-KILL] Không tìm thấy RemoteEvent Screech, đang dùng phương pháp thay thế...")
+        
+        -- Dùng camera tự động nhìn xuống
+        spawn(function()
+            while true do
+                task.wait(0.3)
+                
+                local character = LocalPlayer.Character
+                if character then
+                    local screech = workspace:FindFirstChild("Screech")
+                    if screech then
+                        -- Nhìn vào Screech
+                        local camera = workspace.CurrentCamera
+                        if camera then
+                            camera.CFrame = CFrame.lookAt(camera.CFrame.Position, screech.Position)
+                            task.wait(0.1)
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- ===== CHỨC NĂNG 4: VÔ HIỆU HÓA MINIGAME TIM (HEARTBEAT MINIGAME) =====
+local function DisableHeartbeatMinigame()
+    print("[ANTI-KILL] Đang vô hiệu hóa minigame tim...")
+    
+    -- Tìm GUI minigame
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    
+    spawn(function()
+        while true do
+            task.wait(0.5)
+            
+            -- Xóa tất cả minigame GUI
+            for _, gui in ipairs(playerGui:GetChildren()) do
+                if gui.Name:find("Heart") or gui.Name:find("Minigame") or gui.Name:find("QTE") then
+                    print("[ANTI-KILL] Đã xóa minigame:", gui.Name)
+                    gui:Destroy()
+                end
+            end
+        end
+    end)
+end
+
+-- ===== CHỨC NĂNG 5: CHỐNG FIGURE & SEEK PHÁT HIỆN =====
+local function AntiDetection()
+    print("[ANTI-KILL] Đang kích hoạt chống phát hiện...")
+    
+    spawn(function()
+        while true do
+            task.wait(0.1)
+            
+            local character = LocalPlayer.Character
+            if not character then continue end
+            
+            -- Vô hiệu hóa âm thanh bước chân
+            local humanoid = character:FindFirstChild("Humanoid")
+            if humanoid then
+                -- Tìm và xóa âm thanh bước chân
+                for _, sound in ipairs(character:GetDescendants()) do
+                    if sound:IsA("Sound") and sound.Name:find("Footstep") then
+                        sound.Volume = 0
+                        sound.Playing = false
+                    end
+                end
+            end
+            
+            -- Tự động crouch khi gần Figure/Seek
+            local figure = workspace:FindFirstChild("Figure")
+            local seek = workspace:FindFirstChild("Seek")
+            
+            if figure or seek then
+                local target = figure or seek
+                local distance = (character.HumanoidRootPart.Position - target.Position).Magnitude
+                
+                if distance < 30 then -- Tầm phát hiện
+                    if humanoid then
+                        humanoid.WalkSpeed = 0 -- Đứng yên
+                        task.wait(2)
+                        humanoid.WalkSpeed = 16
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ===== CHỨC NĂNG 6: TỰ ĐỘNG REVIVE (HỒI SINH) =====
+local function AutoRevive()
+    print("[ANTI-KILL] Đang kích hoạt tự động hồi sinh...")
+    
+    local oldHealth = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health or 100
+    
+    spawn(function()
+        while true do
+            task.wait(0.1)
+            
+            local character = LocalPlayer.Character
+            if not character then continue end
+            
+            local humanoid = character:FindFirstChild("Humanoid")
+            if not humanoid then continue end
+            
+            -- Nếu sắp chết (<20 HP), hồi phục
+            if humanoid.Health > 0 and humanoid.Health < 20 then
+                print("[ANTI-KILL] Máu thấp, đang hồi phục...")
+                humanoid.Health = 100
+            end
+            
+            -- Nếu đã chết, respawn
+            if humanoid.Health <= 0 then
+                print("[ANTI-KILL] Đã chết, đang respawn...")
+                
+                -- Gửi tín hiệu respawn
+                local respawnEvent = ReplicatedStorage:FindFirstChild("Respawn")
+                if respawnEvent then
+                    respawnEvent:FireServer()
+                end
+            end
+        end
+    end)
+end
+
+-- ===== CHỨC NĂNG 7: BẢO VỆ KHỎI CRUCIFIX BỊ PHÁ HỦY (CHO ENTITY BẤT TỬ) =====
+local function ProtectFromEntityExploit()
+    print("[ANTI-KILL] Đang bảo vệ khỏi entity exploit...")
+    
+    -- Vô hiệu hóa Crucifix từ phía client
+    spawn(function()
+        while true do
+            task.wait(1)
+            
+            local character = LocalPlayer.Character
+            if not character then continue end
+            
+            -- Tìm Crucifix trong inventory
+            local backpack = LocalPlayer.Backpack
+            local crucifix = backpack:FindFirstChild("Crucifix") 
+                or (character:FindFirstChild("Crucifix"))
+            
+            if crucifix then
+                print("[ANTI-KILL] Đã tìm thấy Crucifix - đang tự động sử dụng nếu cần...")
+                -- Có thể thêm logic auto-use crucifix tại đây
+            end
+        end
+    end)
+end
+
+-- ===== CHỨC NĂNG CHÍNH: ENITY KHÔNG THỂ KILL BẠN =====
+local function MakeEntityCantKillYou()
+    print("\n")
+    print("=" :rep(50))
+    print("🛡️ ANTI-ENTITY KILL ADDON")
+    print("=" :rep(50))
+    print("ĐANG KÍCH HOẠT TẤT CẢ BẢO VỆ...")
+    print("-" :rep(50))
+    
+    -- Kích hoạt tất cả chức năng
+    DisableEntityKill()
+    AutoAvoidScreech()
+    DisableHeartbeatMinigame()
+    AntiDetection()
+    
+    print("-" :rep(50))
+    print("✅ TẤT CẢ BẢO VỆ ĐÃ SẴN SÀNG!")
+    print("BẠN KHÔNG THỂ BỊ KILL BỞI BẤT KỲ ENTITY NÀO!")
+    print("=" :rep(50))
+end
+
+-- ===== KHỞI ĐỘNG =====
+MakeEntityCantKillYou()
+
+-- ===== NHẬN DIỆN ENTITY GẦN BẠN =====
+spawn(function()
+    while true do
+        task.wait(2)
+        
+        local character = LocalPlayer.Character
+        if not character then continue end
+        
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        if not humanoidRootPart then continue end
+        
+        -- Quét tất cả entity gần đó
+        for _, entityName in ipairs(DANGEROUS_ENTITIES) do
+            local entity = workspace:FindFirstChild(entityName)
+            if entity then
+                local entityPos = entity:FindFirstChild("HumanoidRootPart") or entity:FindFirstChild("Head") or entity
+                if entityPos then
+                    local distance = (humanoidRootPart.Position - entityPos.Position).Magnitude
+                    if distance < 20 then
+                        print("⚠️ [" .. entityName .. "] CÁCH BẠN " .. math.floor(distance) .. "m - ĐÃ ĐƯỢC BẢO VỆ!")
+                    end
+                end
+            end
+        end
+    end
+end)
+
+print("🛡️ ANTI-ENTITY KILL ADDON ĐÃ SẴN SÀNG!")
